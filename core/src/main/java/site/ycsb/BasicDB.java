@@ -283,6 +283,12 @@ public class BasicDB extends DB {
   }
 
   @Override
+  public Status filter(String table, String startkey, int recordcount, String filtertype, Object filterproperties,
+                       Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+    return null;
+  }
+
+  @Override
   public void cleanup() {
     synchronized (MUTEX) {
       int countDown = --counter;

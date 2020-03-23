@@ -48,6 +48,7 @@ public class DBWrapper extends DB {
   private final String scopeStringRead;
   private final String scopeStringScan;
   private final String scopeStringUpdate;
+  private final String scopeStringFilter;
 
   public DBWrapper(final DB db, final Tracer tracer) {
     this.db = db;
@@ -61,6 +62,7 @@ public class DBWrapper extends DB {
     scopeStringRead = simple + "#read";
     scopeStringScan = simple + "#scan";
     scopeStringUpdate = simple + "#update";
+    scopeStringFilter = simple + "#filter";
   }
 
   /**
@@ -241,6 +243,20 @@ public class DBWrapper extends DB {
       long en = System.nanoTime();
       measure("DELETE", res, ist, st, en);
       measurements.reportStatus("DELETE", res);
+      return res;
+    }
+  }
+
+  @Override
+  public Status filter(String table, String startkey, int recordcount, String filtertype, Object filterproperties,
+                       Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+    try (final TraceScope span = tracer.newScope(scopeStringFilter)) {
+      long ist = measurements.getIntendedtartTimeNs();
+      long st = System.nanoTime();
+      Status res = db.filter(table, startkey, recordcount, filtertype, filterproperties, fields, result);
+      long en=System.nanoTime();
+      measure("FILTER", res, ist, st, en);
+      measurements.reportStatus("FILTER", res);
       return res;
     }
   }

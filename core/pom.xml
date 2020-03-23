@@ -49,6 +49,11 @@ LICENSE file.
       <version>${jackson.api.version}</version>
     </dependency>
     <dependency>
+      <groupId>pt.uminho.haslab</groupId>
+      <artifactId>safeclient</artifactId>
+      <version>1.0.3</version>
+    </dependency>
+    <dependency>
       <groupId>org.testng</groupId>
       <artifactId>testng</artifactId>
       <version>6.1.1</version>

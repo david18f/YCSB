@@ -158,4 +158,10 @@ public class GoodBadUglyDB extends DB {
     delay();
     return Status.OK;
   }
+
+  @Override
+  public Status filter(String table, String startkey, int recordcount, String filtertype, Object filterproperties, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+    delay();
+    return Status.OK;
+  }
 }

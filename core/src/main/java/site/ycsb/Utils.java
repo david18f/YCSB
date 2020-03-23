@@ -30,8 +30,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * Utility functions.
  */
 public final class Utils {
-  private static final Random rand = new Random();
-  private static final ThreadLocal<Random> rng = new ThreadLocal<Random>();
+  private static final Random RANDOM = new Random();
+  private static final ThreadLocal<Random> RNG = new ThreadLocal<Random>();
   private static String seed = null;
 
   private Utils() {
@@ -43,15 +43,14 @@ public final class Utils {
   }
 
   public static Random random() {
-    Random ret = rng.get();
+    Random ret = RNG.get();
     if(ret == null) {
       if(seed == null) {
-        ret = new Random(rand.nextLong());
-      }
-      else {
+        ret = new Random(RANDOM.nextLong());
+      } else {
         ret = new Random(Long.parseLong(seed));
       }
-      rng.set(ret);
+      RNG.set(ret);
     }
     return ret;
   }

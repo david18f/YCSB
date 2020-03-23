@@ -552,6 +552,13 @@ public class TestTimeSeriesWorkload {
       // TODO Auto-generated method stub
       return Status.OK;
     }
+
+    @Override
+    public Status filter(String table, String startkey, int recordcount, String filtertype, Object filterproperties,
+                         Set<String> fields, Vector<HashMap<String,ByteIterator>> result) {
+      // TODO Auto-generated method stub
+      return Status.OK;
+    }
     
     public void dumpStdout() {
       for (int i = 0; i < keys.size(); i++) {
