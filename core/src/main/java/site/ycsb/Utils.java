@@ -23,14 +23,37 @@ import java.lang.management.OperatingSystemMXBean;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Utility functions.
  */
 public final class Utils {
+  private static final Random rand = new Random();
+  private static final ThreadLocal<Random> rng = new ThreadLocal<Random>();
+  private static String seed = null;
+
   private Utils() {
     // not used
+  }
+
+  public static void setSeed(String s) {
+    seed = s;
+  }
+
+  public static Random random() {
+    Random ret = rng.get();
+    if(ret == null) {
+      if(seed == null) {
+        ret = new Random(rand.nextLong());
+      }
+      else {
+        ret = new Random(Long.parseLong(seed));
+      }
+      rng.set(ret);
+    }
+    return ret;
   }
 
   /**
@@ -228,5 +251,60 @@ public final class Utils {
       array[i] = temp;
     }
     return array;
+  }
+
+  public static String addPadding(String value, int formatSize, char appendItem) {
+    if(value.length() >= formatSize)
+      return value;
+    else {
+      StringBuilder padding = new StringBuilder();
+      int length = formatSize - value.length();
+      for(int i = 0; i < length; i++) {
+        padding.append(appendItem);
+      }
+      padding.append(value);
+
+      return padding.toString();
+    }
+  }
+
+  public static String addPadding(String value, int formatSize) {
+    if(value.length() >= formatSize)
+      return value;
+    else {
+      StringBuilder padding = new StringBuilder();
+      int length = formatSize - value.length();
+      for(int i = 0; i < length; i++) {
+        padding.append(Character.toString((char)0));
+      }
+      padding.append(value);
+      return padding.toString();
+    }
+  }
+
+  public static String removePadding(String value) {
+    int padded = 0;
+    for(int i = 0; i < value.length(); i++) {
+      char[] val = value.toCharArray();
+      if(val[i] == (char) 0)
+        padded++;
+      else
+        break;
+    }
+    if(padded != 0) {
+      return new String(value.toCharArray(), padded, (value.length()-padded));
+    }
+    else
+      return value;
+  }
+
+  public static String[] splitField(String field) {
+    String[] fields = field.split(":");
+    if(fields[0] == null && fields[1] == null) {
+      throw new NullPointerException("No qualifier founded.");
+    }
+    else {
+      return fields;
+    }
   }
 }
