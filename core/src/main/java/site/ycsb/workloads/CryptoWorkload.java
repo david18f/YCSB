@@ -373,16 +373,21 @@ public class CryptoWorkload extends CoreWorkload {
   // TODO safe: check if we have to change this
   @Override
   protected String buildKeyName(long keynum) {
+//    if (!orderedinserts) {
+//      keynum = Utils.hash(keynum);
+//    }
+//    String value = Long.toString(keynum);
+//    int fill = zeropadding - value.length();
+//    String prekey = "user";
+//    for (int i = 0; i < fill; i++) {
+//      prekey += '0';
+//    }
+//    return prekey + value;
+
     if (!orderedinserts) {
       keynum = Utils.hash(keynum);
     }
-    String value = Long.toString(keynum);
-    int fill = zeropadding - value.length();
-    String prekey = "user";
-    for (int i = 0; i < fill; i++) {
-      prekey += '0';
-    }
-    return prekey + value;
+    return String.valueOf((int)keynum);
   }
 
   private ByteIterator generateQualifierValue(int index) {

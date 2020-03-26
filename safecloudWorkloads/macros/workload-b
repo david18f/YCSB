@@ -1,0 +1,64 @@
+# Copyright (c) 2010 Yahoo! Inc. All rights reserved.                                                                                                                             
+#                                                                                                                                                                                 
+# Licensed under the Apache License, Version 2.0 (the "License"); you                                                                                                             
+# may not use this file except in compliance with the License. You                                                                                                                
+# may obtain a copy of the License at                                                                                                                                             
+#                                                                                                                                                                                 
+# http://www.apache.org/licenses/LICENSE-2.0                                                                                                                                      
+#                                                                                                                                                                                 
+# Unless required by applicable law or agreed to in writing, software                                                                                                             
+# distributed under the License is distributed on an "AS IS" BASIS,                                                                                                               
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or                                                                                                                 
+# implied. See the License for the specific language governing                                                                                                                    
+# permissions and limitations under the License. See accompanying                                                                                                                 
+# LICENSE file.                                                                                                                                                                   
+
+# Yahoo! Cloud System Benchmark
+# Workload B: Read mostly workload
+#   Application example: photo tagging; add a tag is an update, but most operations are to read tags
+#                        
+#   Read/update ratio: 95/5
+#   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
+#   Request distribution: zipfian
+
+workload=com.yahoo.ycsb.workloads.CryptoWorkload
+
+# schema file property
+# schemafileproperty=schema.xml
+
+# number of records to load into the database initially
+# recordcount=1000000
+
+# number of operations to perform
+# operationcount=50000000
+
+# execution time
+# maxexecutiontime=60
+
+# number of YCSB clients threads
+threadcount=1
+
+# to read all fields set true, to read only one set false
+readallfields=true
+
+# to update all fields set true, to update only one set false
+writeallfields=false
+
+# operations proportion (read, update, scan and insert)
+readproportion=0.95
+updateproportion=0.05
+scanproportion=0
+insertproportion=0
+filterproportion=0
+
+
+# what distribution should be used to select the records to operate on
+requestdistribution=zipfian
+
+seed=1024
+insertorder=hashed
+insertstart=0
+
+removetableproperty=false
+
+

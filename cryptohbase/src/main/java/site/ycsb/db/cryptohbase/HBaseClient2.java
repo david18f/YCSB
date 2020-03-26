@@ -1,7 +1,7 @@
 package site.ycsb.db.cryptohbase;
 
-import pt.uminho.haslab.hbaseInterfaces.ExtendedTable;
-import pt.uminho.haslab.safemapper.TableSchema;
+import org.apache.hadoop.hbase.*;
+import org.apache.hadoop.hbase.filter.*;
 import site.ycsb.ByteArrayByteIterator;
 import site.ycsb.ByteIterator;
 import site.ycsb.DBException;
@@ -10,10 +10,6 @@ import site.ycsb.measurements.Measurements;
 
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.CellUtil;
-import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.BufferedMutator;
 import org.apache.hadoop.hbase.client.BufferedMutatorParams;
@@ -27,7 +23,6 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
-import org.apache.hadoop.hbase.filter.PageFilter;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.IOException;
@@ -89,10 +84,6 @@ public class HBaseClient2 extends site.ycsb.DB {
   private boolean clientSideBuffering = false;
   private long writeBufferSize = 1024 * 1024 * 12;
 
-  /* SafeNoSQL instances */
-  private ExtendedTable exTable;
-  private String schemaFile;
-  private TableSchema tableSchema;
   /**
    * Initialize any state for this DB. Called once per DB instance; there is one
    * DB instance per client thread.
@@ -509,6 +500,126 @@ public class HBaseClient2 extends site.ycsb.DB {
     }
 
     return Status.OK;
+  }
+
+  @Override
+  public Status filter(String table, String startkey, int recordcount, String filtertype, Object filterproperties, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+    //if this is a "new" tableName, init HTable object.  Else, use existing one
+    if (!tableName.equals(table)) {
+      currentTable = null;
+      try {
+        getHTable(table);
+        tableName = table;
+      } catch (IOException e) {
+        System.err.println("Error accessing HBase table: " + e);
+        return Status.ERROR;
+      }
+    }
+
+    Scan s = new Scan().withStartRow(Bytes.toBytes(startkey));
+    s.setCaching(recordcount);
+    Filter filter = whichFilter(filtertype, (String[]) filterproperties);
+    s.setFilter(filter);
+
+    //add specified fields or else all fields
+    if (fields == null) {
+      s.addFamily(columnFamilyBytes);
+    } else {
+      for (String field : fields) {
+        s.addColumn(columnFamilyBytes, Bytes.toBytes(field));
+      }
+    }
+
+    //get results
+    try (ResultScanner scanner = currentTable.getScanner(s)) {
+      int numResults = 0;
+      int total = 0;
+      for (Result rr = scanner.next(); rr != null; rr = scanner.next()) {
+        //get row key
+        String key = Bytes.toString(rr.getRow());
+
+        if (key != null) {
+
+          if (debug) {
+            System.out.println("Got filter scan result for key: " + key);
+          }
+
+          HashMap<String, ByteIterator> rowResult = new HashMap<>();
+
+          while (rr.advance()) {
+            final Cell cell = rr.current();
+            rowResult.put(Bytes.toString(CellUtil.cloneQualifier(cell)),
+                new ByteArrayByteIterator(CellUtil.cloneValue(cell)));
+          }
+
+          result.add(rowResult);
+          numResults++;
+
+          if (numResults >= recordcount) {
+            break;
+          }
+
+        } //done with row
+        total++;
+      }
+//      String[] fp1 = (String[]) filterproperties;
+//      System.out.println("Filter Scan[" + startkey + ", " + fp1[0] + ", " + fp1[1] + ", " + numResults + ", " + total + "]");
+//      System.out.println("Filter Scan NumResults: " + numResults + " - RecordCount: " + recordcount);
+
+    } catch (IOException e) {
+      if (debug) {
+        System.out.println("Error in getting/parsing scan result: " + e);
+      }
+      return Status.ERROR;
+    }
+    return Status.OK;
+  }
+
+  public Filter whichFilter(String filtertype, String[] properties) {
+    Filter filter;
+    switch (filtertype) {
+      case "singlecolumnvaluefilter":
+        filter = new SingleColumnValueFilter(
+            Bytes.toBytes(properties[2]),
+            Bytes.toBytes(properties[3]),
+            whichOperator(properties[0]),
+            new BinaryComparator(Bytes.toBytes(properties[1]))
+        );
+        break;
+      case "rowfilter":
+      default:
+        filter = new RowFilter(
+            whichOperator(properties[0]),
+            new BinaryComparator(Bytes.toBytes(properties[1]))
+        );
+        break;
+    }
+    return filter;
+  }
+
+  public CompareOperator whichOperator(String operator) {
+    CompareOperator op;
+    switch (operator) {
+      case "GREATER":
+        op = CompareOperator.GREATER;
+        break;
+      case "GREATER_OR_EQUAL":
+        op = CompareOperator.GREATER_OR_EQUAL;
+        break;
+      case "EQUAL":
+        op = CompareOperator.EQUAL;
+        break;
+      case "LESS":
+        op = CompareOperator.LESS;
+        break;
+      case "LESS_OR_EQUAL":
+        op = CompareOperator.LESS_OR_EQUAL;
+        break;
+      default:
+        op = CompareOperator.NO_OP;
+        break;
+    }
+    return op;
   }
 
   // Only non-private for testing.

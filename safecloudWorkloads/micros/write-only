@@ -1,0 +1,42 @@
+# Yahoo! Cloud System Benchmark
+# Workload Only Writes: Heavy write workload
+#   Application example: Session store recording recent actions
+#
+#   Read/update ratio: 0/100
+#   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
+#   Request distribution: zipfian
+
+workload=com.yahoo.ycsb.workloads.CryptoWorkload
+
+# schema file property
+# schemafileproperty=schema.xml
+
+# number of records to load into the database initially
+# recordcount=1000
+
+# number of operations to perform
+# operationcount=100
+
+# execution time
+# maxexecutiontime=60
+
+# number of YCSB clients threads
+threadcount=1
+
+# to write all fields set true, to write only one set false
+writeallfields=true
+
+# operations proportion (read, update, scan and insert)
+readproportion=0
+updateproportion=0
+scanproportion=0
+insertproportion=1
+
+# what distribution should be used to select the records to operate on
+# requestdistribution=zipfian
+
+seed=1024
+insertorder=hashed
+insertstart=0
+
+removetableproperty=false
