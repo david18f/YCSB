@@ -324,7 +324,7 @@ public class HBaseClient2 extends site.ycsb.DB {
       }
     }
 
-    Scan s = new Scan(Bytes.toBytes(startkey));
+    Scan s = new Scan().withStartRow(Bytes.toBytes(startkey));
     // HBase has no record limit. Here, assume recordcount is small enough to
     // bring back in one call.
     // We get back recordcount records

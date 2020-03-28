@@ -1,40 +1,30 @@
 package site.ycsb.db.cryptohbase;
 
 import org.apache.hadoop.hbase.*;
+import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.filter.*;
-import site.ycsb.ByteArrayByteIterator;
-import site.ycsb.ByteIterator;
-import site.ycsb.DBException;
-import site.ycsb.Status;
+import pt.uminho.haslab.safeclient.secureTable.CryptoTable;
+import pt.uminho.haslab.safemapper.DatabaseSchema;
+import pt.uminho.haslab.safemapper.Family;
+import pt.uminho.haslab.safemapper.Qualifier;
+import pt.uminho.haslab.safemapper.TableSchema;
+import site.ycsb.*;
 import site.ycsb.measurements.Measurements;
 
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.client.Admin;
-import org.apache.hadoop.hbase.client.BufferedMutator;
-import org.apache.hadoop.hbase.client.BufferedMutatorParams;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
-import org.apache.hadoop.hbase.client.Delete;
-import org.apache.hadoop.hbase.client.Durability;
-import org.apache.hadoop.hbase.client.Get;
-import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.Scan;
-import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.IOException;
-import java.util.ConcurrentModificationException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.Vector;
+import java.nio.ByteBuffer;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static site.ycsb.Utils.splitField;
 import static site.ycsb.workloads.CoreWorkload.TABLENAME_PROPERTY;
 import static site.ycsb.workloads.CoreWorkload.TABLENAME_PROPERTY_DEFAULT;
+import static site.ycsb.workloads.CryptoWorkload.removeTableProperty;
+import static site.ycsb.workloads.CryptoWorkload.schemafileproperty;
 
 /*TODO safe: update comments*/
 /**
@@ -84,12 +74,19 @@ public class HBaseClient2 extends site.ycsb.DB {
   private boolean clientSideBuffering = false;
   private long writeBufferSize = 1024 * 1024 * 12;
 
+  private String schemaFile;
+  private TableSchema tableSchema;
+
   /**
    * Initialize any state for this DB. Called once per DB instance; there is one
    * DB instance per client thread.
    */
   @Override
   public void init() throws DBException {
+    // TODO safe: add conf.xml and key.txt?
+    //    Inject the schema file path to the Configuration object
+    config.set("schema", schemafileproperty);
+
     if ("true"
         .equals(getProperties().getProperty("clientbuffering", "false"))) {
       this.clientSideBuffering = true;
@@ -159,6 +156,43 @@ public class HBaseClient2 extends site.ycsb.DB {
       throw new DBException("No columnfamily specified");
     }
     columnFamilyBytes = Bytes.toBytes(columnFamily);
+
+    this.schemaFile = schemafileproperty;
+    this.tableSchema = new DatabaseSchema(this.schemaFile).getTableSchema(table);
+  }
+
+  public boolean checkIfTableExists(String tablename) {
+    try {
+      return connection.getAdmin().tableExists(TableName.valueOf(tablename));
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return false;
+  }
+
+  public void createTable(TableSchema schema) {
+    try {
+      TableDescriptorBuilder tableDescriptorBuilder = TableDescriptorBuilder.newBuilder(TableName.valueOf(schema.getTablename()));
+      List<ColumnFamilyDescriptor> columnFamilyDescriptors = new ArrayList<>();
+      for (Family fam : schema.getColumnFamilies()) {
+        ColumnFamilyDescriptorBuilder columnFamilyDescriptorBuilder = ColumnFamilyDescriptorBuilder.newBuilder(Bytes.toBytes(fam.getFamilyName()));
+        columnFamilyDescriptors.add(columnFamilyDescriptorBuilder.build());
+      }
+      tableDescriptorBuilder.setColumnFamilies(columnFamilyDescriptors);
+      connection.getAdmin().createTable(tableDescriptorBuilder.build());
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
+  public void removeTable(String tablename) {
+    try {
+      Admin admin = connection.getAdmin();
+      admin.disableTable(TableName.valueOf(tablename));
+      admin.deleteTable(TableName.valueOf(tablename));
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
   }
 
   /**
@@ -192,6 +226,9 @@ public class HBaseClient2 extends site.ycsb.DB {
           }
         }
       }
+      if(removeTableProperty.equals("true")) {
+        removeTable(tableName);
+      }
     } catch (IOException e) {
       throw new DBException(e);
     }
@@ -199,12 +236,33 @@ public class HBaseClient2 extends site.ycsb.DB {
 
   public void getHTable(String table) throws IOException {
     final TableName tName = TableName.valueOf(table);
-    this.currentTable = connection.getTable(tName);
+    if(!checkIfTableExists(table)) {
+      System.out.println("Table does not exists. Creating table ...");
+      createTable(this.tableSchema);
+    }
+    this.currentTable = new CryptoTable(config, table, this.tableSchema);
     if (clientSideBuffering) {
       final BufferedMutatorParams p = new BufferedMutatorParams(tName);
       p.writeBufferSize(writeBufferSize);
       this.bufferedMutator = connection.getBufferedMutator(p);
     }
+  }
+
+  public Status verifyTable(String table) {
+    Status verifyStatus = Status.OK;
+    //if this is a "new" tableName, init HTable object.  Else, use existing one
+    if (!this.tableName.equals(table)) {
+      currentTable = null;
+      try {
+        getHTable(table);
+        this.tableName = table;
+      } catch (IOException e) {
+        System.err.println("Error accessing HBase tableName: " + e);
+        verifyStatus = Status.ERROR;
+      }
+    }
+
+    return verifyStatus;
   }
 
   /**
@@ -223,59 +281,57 @@ public class HBaseClient2 extends site.ycsb.DB {
    */
   public Status read(String table, String key, Set<String> fields,
                      Map<String, ByteIterator> result) {
-    // if this is a "new" table, init HTable object. Else, use existing one
-    if (!tableName.equals(table)) {
-      currentTable = null;
+    Status statusResult = verifyTable(table);
+
+    if (statusResult == Status.OK) {
+      Result r;
       try {
-        getHTable(table);
-        tableName = table;
+        if (debug) {
+          System.out.println("Trying to read: " + key);
+        }
+        Get g = new Get(Bytes.toBytes(key));
+        if (fields == null) {
+          for (Family f : this.tableSchema.getColumnFamilies()) {
+            g.addFamily(f.getFamilyName().getBytes());
+          }
+        } else {
+          for (String field : fields) {
+            String[] temp_fields = splitField(field);
+            g.addColumn(Bytes.toBytes(temp_fields[0]), Bytes.toBytes(temp_fields[1]));
+          }
+        }
+        // Perform the get operation in the Table interface
+        r = currentTable.get(g);
       } catch (IOException e) {
-        System.err.println("Error accessing HBase table: " + e);
+        if (debug) {
+          System.err.println("Error doing get: " + e);
+        }
+        return Status.ERROR;
+      } catch (ConcurrentModificationException e) {
+        // do nothing for now...need to understand HBase concurrency model better
         return Status.ERROR;
       }
-    }
 
-    Result r = null;
-    try {
-      if (debug) {
-        System.out
-            .println("Doing read from HBase columnfamily " + columnFamily);
-        System.out.println("Doing read for key: " + key);
+      if (r.isEmpty()) {
+        return Status.NOT_FOUND;
       }
-      Get g = new Get(Bytes.toBytes(key));
-      if (fields == null) {
-        g.addFamily(columnFamilyBytes);
-      } else {
-        for (String field : fields) {
-          g.addColumn(columnFamilyBytes, Bytes.toBytes(field));
+
+//      String stringResult = buildStringResult(r, "Get");
+//          System.out.println(stringResult);
+
+      while (r.advance()) {
+        final Cell c = r.current();
+        result.put(Bytes.toString(CellUtil.cloneQualifier(c)),
+            new ByteArrayByteIterator(CellUtil.cloneValue(c)));
+        if (debug) {
+          System.out.println(
+              "Result for field: " + Bytes.toString(CellUtil.cloneQualifier(c))
+                  + " is: " + Bytes.toString(CellUtil.cloneValue(c)));
         }
       }
-      r = currentTable.get(g);
-    } catch (IOException e) {
-      if (debug) {
-        System.err.println("Error doing get: " + e);
-      }
-      return Status.ERROR;
-    } catch (ConcurrentModificationException e) {
-      // do nothing for now...need to understand HBase concurrency model better
-      return Status.ERROR;
     }
 
-    if (r.isEmpty()) {
-      return Status.NOT_FOUND;
-    }
-
-    while (r.advance()) {
-      final Cell c = r.current();
-      result.put(Bytes.toString(CellUtil.cloneQualifier(c)),
-          new ByteArrayByteIterator(CellUtil.cloneValue(c)));
-      if (debug) {
-        System.out.println(
-            "Result for field: " + Bytes.toString(CellUtil.cloneQualifier(c))
-                + " is: " + Bytes.toString(CellUtil.cloneValue(c)));
-      }
-    }
-    return Status.OK;
+    return statusResult;
   }
 
   /**
@@ -298,81 +354,79 @@ public class HBaseClient2 extends site.ycsb.DB {
   @Override
   public Status scan(String table, String startkey, int recordcount,
                      Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-    // if this is a "new" table, init HTable object. Else, use existing one
-    if (!tableName.equals(table)) {
-      currentTable = null;
+    Status statusResult = verifyTable(table);
+
+    if(statusResult == Status.OK) {
+      Scan s = new Scan().withStartRow(Bytes.toBytes(startkey));
+      // HBase has no record limit. Here, assume recordcount is small enough to
+      // bring back in one call.
+      // We get back recordcount records
+      s.setCaching(recordcount);
+      if (this.usePageFilter) {
+        s.setFilter(new PageFilter(recordcount));
+      }
+
+      // add specified fields or else all fields
+      if (fields == null) {
+        for (Family f : this.tableSchema.getColumnFamilies()) {
+          s.addFamily(f.getFamilyName().getBytes());
+        }
+      } else {
+        for (String field : fields) {
+          String[] temp_fields = splitField(field);
+          s.addColumn(Bytes.toBytes(temp_fields[0]), Bytes.toBytes(temp_fields[1]));
+        }
+      }
+
+      // get results
+      ResultScanner scanner = null;
       try {
-        getHTable(table);
-        tableName = table;
+        scanner = currentTable.getScanner(s);
+        int numResults = 0;
+        for (Result rr = scanner.next(); rr != null; rr = scanner.next()) {
+          // get row key
+          String key = Bytes.toString(rr.getRow());
+
+          if (debug) {
+            System.out.println("Got scan result for key: " + key);
+          }
+
+//          String stringResult = buildStringResult(rr, "Scan");
+//            System.out.println(stringResult);
+
+          HashMap<String, ByteIterator> rowResult =
+              new HashMap<String, ByteIterator>();
+
+          while (rr.advance()) {
+            final Cell cell = rr.current();
+            rowResult.put(Bytes.toString(CellUtil.cloneQualifier(cell)),
+                new ByteArrayByteIterator(CellUtil.cloneValue(cell)));
+          }
+
+          // add rowResult to result vector
+          result.add(rowResult);
+          numResults++;
+
+          // PageFilter does not guarantee that the number of results is <=
+          // pageSize, so this
+          // break is required.
+          if (numResults >= recordcount) {// if hit recordcount, bail out
+            break;
+          }
+        } // done with row
       } catch (IOException e) {
-        System.err.println("Error accessing HBase table: " + e);
-        return Status.ERROR;
-      }
-    }
-
-    Scan s = new Scan(Bytes.toBytes(startkey));
-    // HBase has no record limit. Here, assume recordcount is small enough to
-    // bring back in one call.
-    // We get back recordcount records
-    s.setCaching(recordcount);
-    if (this.usePageFilter) {
-      s.setFilter(new PageFilter(recordcount));
-    }
-
-    // add specified fields or else all fields
-    if (fields == null) {
-      s.addFamily(columnFamilyBytes);
-    } else {
-      for (String field : fields) {
-        s.addColumn(columnFamilyBytes, Bytes.toBytes(field));
-      }
-    }
-
-    // get results
-    ResultScanner scanner = null;
-    try {
-      scanner = currentTable.getScanner(s);
-      int numResults = 0;
-      for (Result rr = scanner.next(); rr != null; rr = scanner.next()) {
-        // get row key
-        String key = Bytes.toString(rr.getRow());
-
         if (debug) {
-          System.out.println("Got scan result for key: " + key);
+          System.out.println("Error in getting/parsing scan result: " + e);
         }
-
-        HashMap<String, ByteIterator> rowResult =
-            new HashMap<String, ByteIterator>();
-
-        while (rr.advance()) {
-          final Cell cell = rr.current();
-          rowResult.put(Bytes.toString(CellUtil.cloneQualifier(cell)),
-              new ByteArrayByteIterator(CellUtil.cloneValue(cell)));
+        return Status.ERROR;
+      } finally {
+        if (scanner != null) {
+          scanner.close();
         }
-
-        // add rowResult to result vector
-        result.add(rowResult);
-        numResults++;
-
-        // PageFilter does not guarantee that the number of results is <=
-        // pageSize, so this
-        // break is required.
-        if (numResults >= recordcount) {// if hit recordcount, bail out
-          break;
-        }
-      } // done with row
-    } catch (IOException e) {
-      if (debug) {
-        System.out.println("Error in getting/parsing scan result: " + e);
-      }
-      return Status.ERROR;
-    } finally {
-      if (scanner != null) {
-        scanner.close();
       }
     }
 
-    return Status.OK;
+    return statusResult;
   }
 
   /**
@@ -391,50 +445,41 @@ public class HBaseClient2 extends site.ycsb.DB {
   @Override
   public Status update(String table, String key,
                        Map<String, ByteIterator> values) {
-    // if this is a "new" table, init HTable object. Else, use existing one
-    if (!tableName.equals(table)) {
-      currentTable = null;
+    Status statusResult = verifyTable(table);
+
+    if(statusResult == Status.OK) {
+      if (debug) {
+        System.out.println("Setting up put for key: " + key);
+      }
+      Put p = new Put(Bytes.toBytes(key));
+      p.setDurability(durability);
+      for (Family f : this.tableSchema.getColumnFamilies()) {
+        for (Qualifier q : f.getQualifiers()) {
+          if(values.containsKey(new String(f.getFamilyName().getBytes()) +":"+ new String(q.getName().getBytes()))) {
+            p.addColumn(f.getFamilyName().getBytes(), q.getName().getBytes(), values.get(new String(f.getFamilyName().getBytes()) +":"+ new String(q.getName().getBytes())).toArray());
+          }
+        }
+      }
+
       try {
-        getHTable(table);
-        tableName = table;
+        if (clientSideBuffering) {
+          // removed Preconditions.checkNotNull, which throws NPE, in favor of NPE on next line
+          bufferedMutator.mutate(p);
+        } else {
+          currentTable.put(p);
+        }
       } catch (IOException e) {
-        System.err.println("Error accessing HBase table: " + e);
+        if (debug) {
+          System.err.println("Error doing put: " + e);
+        }
+        return Status.ERROR;
+      } catch (ConcurrentModificationException e) {
+        // do nothing for now...hope this is rare
         return Status.ERROR;
       }
     }
 
-    if (debug) {
-      System.out.println("Setting up put for key: " + key);
-    }
-    Put p = new Put(Bytes.toBytes(key));
-    p.setDurability(durability);
-    for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-      byte[] value = entry.getValue().toArray();
-      if (debug) {
-        System.out.println("Adding field/value " + entry.getKey() + "/"
-            + Bytes.toStringBinary(value) + " to put request");
-      }
-      p.addColumn(columnFamilyBytes, Bytes.toBytes(entry.getKey()), value);
-    }
-
-    try {
-      if (clientSideBuffering) {
-        // removed Preconditions.checkNotNull, which throws NPE, in favor of NPE on next line
-        bufferedMutator.mutate(p);
-      } else {
-        currentTable.put(p);
-      }
-    } catch (IOException e) {
-      if (debug) {
-        System.err.println("Error doing put: " + e);
-      }
-      return Status.ERROR;
-    } catch (ConcurrentModificationException e) {
-      // do nothing for now...hope this is rare
-      return Status.ERROR;
-    }
-
-    return Status.OK;
+    return statusResult;
   }
 
   /**
@@ -467,112 +512,103 @@ public class HBaseClient2 extends site.ycsb.DB {
    */
   @Override
   public Status delete(String table, String key) {
-    // if this is a "new" table, init HTable object. Else, use existing one
-    if (!tableName.equals(table)) {
-      currentTable = null;
+    Status statusResult = verifyTable(table);
+
+    if(statusResult == Status.OK) {
+      if (debug) {
+        System.out.println("Doing delete for key: " + key);
+      }
+
+      final Delete d = new Delete(Bytes.toBytes(key));
+      d.setDurability(durability);
       try {
-        getHTable(table);
-        tableName = table;
+        if (clientSideBuffering) {
+          // removed Preconditions.checkNotNull, which throws NPE, in favor of NPE on next line
+          bufferedMutator.mutate(d);
+        } else {
+          currentTable.delete(d);
+        }
       } catch (IOException e) {
-        System.err.println("Error accessing HBase table: " + e);
+        if (debug) {
+          System.err.println("Error doing delete: " + e);
+        }
         return Status.ERROR;
       }
     }
 
-    if (debug) {
-      System.out.println("Doing delete for key: " + key);
-    }
-
-    final Delete d = new Delete(Bytes.toBytes(key));
-    d.setDurability(durability);
-    try {
-      if (clientSideBuffering) {
-        // removed Preconditions.checkNotNull, which throws NPE, in favor of NPE on next line
-        bufferedMutator.mutate(d);
-      } else {
-        currentTable.delete(d);
-      }
-    } catch (IOException e) {
-      if (debug) {
-        System.err.println("Error doing delete: " + e);
-      }
-      return Status.ERROR;
-    }
-
-    return Status.OK;
+    return statusResult;
   }
 
   @Override
   public Status filter(String table, String startkey, int recordcount, String filtertype, Object filterproperties, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-    //if this is a "new" tableName, init HTable object.  Else, use existing one
-    if (!tableName.equals(table)) {
-      currentTable = null;
-      try {
-        getHTable(table);
-        tableName = table;
-      } catch (IOException e) {
-        System.err.println("Error accessing HBase table: " + e);
-        return Status.ERROR;
+    Status statusResult = verifyTable(table);
+
+    if(statusResult == Status.OK) {
+
+      Scan s = new Scan().withStartRow(Bytes.toBytes(startkey));
+      s.setCaching(recordcount);
+      Filter filter = whichFilter(filtertype, (String[]) filterproperties);
+      s.setFilter(filter);
+
+      //add specified fields or else all fields
+      if (fields == null) {
+        for (Family f : this.tableSchema.getColumnFamilies()) {
+          s.addFamily(f.getFamilyName().getBytes());
+        }
+      } else {
+        for (String field : fields) {
+          String[] temp_fields = splitField(field);
+          s.addColumn(Bytes.toBytes(temp_fields[0]), Bytes.toBytes(temp_fields[1]));
+        }
       }
-    }
 
-    Scan s = new Scan().withStartRow(Bytes.toBytes(startkey));
-    s.setCaching(recordcount);
-    Filter filter = whichFilter(filtertype, (String[]) filterproperties);
-    s.setFilter(filter);
+      //get results
+      try (ResultScanner scanner = currentTable.getScanner(s)) {
+        int numResults = 0;
+        int total = 0;
+        for (Result rr = scanner.next(); rr != null; rr = scanner.next()) {
+          //get row key
+          String key = Bytes.toString(rr.getRow());
 
-    //add specified fields or else all fields
-    if (fields == null) {
-      s.addFamily(columnFamilyBytes);
-    } else {
-      for (String field : fields) {
-        s.addColumn(columnFamilyBytes, Bytes.toBytes(field));
-      }
-    }
+          if (key != null) {
 
-    //get results
-    try (ResultScanner scanner = currentTable.getScanner(s)) {
-      int numResults = 0;
-      int total = 0;
-      for (Result rr = scanner.next(); rr != null; rr = scanner.next()) {
-        //get row key
-        String key = Bytes.toString(rr.getRow());
+            if (debug) {
+              System.out.println("Got filter scan result for key: " + key);
+            }
 
-        if (key != null) {
+//            String stringResult = buildStringResult(rr, "Filter");
+//            System.out.println(stringResult);
 
-          if (debug) {
-            System.out.println("Got filter scan result for key: " + key);
-          }
+            HashMap<String, ByteIterator> rowResult = new HashMap<>();
 
-          HashMap<String, ByteIterator> rowResult = new HashMap<>();
+            while (rr.advance()) {
+              final Cell cell = rr.current();
+              rowResult.put(Bytes.toString(CellUtil.cloneQualifier(cell)),
+                  new ByteArrayByteIterator(CellUtil.cloneValue(cell)));
+            }
 
-          while (rr.advance()) {
-            final Cell cell = rr.current();
-            rowResult.put(Bytes.toString(CellUtil.cloneQualifier(cell)),
-                new ByteArrayByteIterator(CellUtil.cloneValue(cell)));
-          }
+            result.add(rowResult);
+            numResults++;
 
-          result.add(rowResult);
-          numResults++;
+            if (numResults >= recordcount) {
+              break;
+            }
 
-          if (numResults >= recordcount) {
-            break;
-          }
-
-        } //done with row
-        total++;
-      }
+          } //done with row
+          total++;
+        }
 //      String[] fp1 = (String[]) filterproperties;
 //      System.out.println("Filter Scan[" + startkey + ", " + fp1[0] + ", " + fp1[1] + ", " + numResults + ", " + total + "]");
 //      System.out.println("Filter Scan NumResults: " + numResults + " - RecordCount: " + recordcount);
 
-    } catch (IOException e) {
-      if (debug) {
-        System.out.println("Error in getting/parsing scan result: " + e);
+      } catch (IOException e) {
+        if (debug) {
+          System.out.println("Error in getting/parsing scan result: " + e);
+        }
+        return Status.ERROR;
       }
-      return Status.ERROR;
     }
-    return Status.OK;
+    return statusResult;
   }
 
   public Filter whichFilter(String filtertype, String[] properties) {
@@ -588,10 +624,15 @@ public class HBaseClient2 extends site.ycsb.DB {
         break;
       case "rowfilter":
       default:
+        byte[] longKey = convertStringToLong(properties[1]);
         filter = new RowFilter(
             whichOperator(properties[0]),
-            new BinaryComparator(Bytes.toBytes(properties[1]))
+            new BinaryComparator(longKey)
         );
+//        filter = new RowFilter(
+//          whichOperator(properties[0]),
+//          new BinaryComparator(Bytes.toBytes(properties[1]))
+//        );
         break;
     }
     return filter;
@@ -620,6 +661,59 @@ public class HBaseClient2 extends site.ycsb.DB {
         break;
     }
     return op;
+  }
+
+  public String buildStringResult(Result rr, String operation) {
+//    StringBuilder sb = new StringBuilder();
+//    sb.append("["+operation+" : ").append(Utils.removePadding(new String(rr.getRow()))).append("] - ");
+//    for (Family f : ct.cryptoProperties.tableSchema.getColumnFamilies()) {
+//      for (Qualifier q : f.getQualifiers()) {
+//        byte[] value = rr.getValue(Bytes.toBytes(f.getFamilyName()), Bytes.toBytes(q.getName()));
+//        if (value != null) {
+//          sb.append("[(" + f.getFamilyName() + "," + q.getName() + ") - " + Utils.removePadding(new String(value)) + "] - ");
+//        }
+//      }
+//    }
+    StringBuilder sb = new StringBuilder();
+//    sb.append("["+operation+" : ").append(convertByteArrayToLong(rr.getRow())).append("] - ");
+    sb.append("["+operation+" : ").append(convertByteArrayToInt(rr.getRow())).append("] - ");
+    for (Family f : this.tableSchema.getColumnFamilies()) {
+      for (Qualifier q : f.getQualifiers()) {
+//        byte[] value = rr.getValue(f.getFamilyName().array(), q.getName().array());
+        byte[] value = rr.getValue(f.getFamilyName().getBytes(), q.getName().getBytes());
+
+        if (value != null) {
+          sb.append("[(" + new String(f.getFamilyName().getBytes()) + "," + new String(q.getName().getBytes()) + ") - " + Utils.removePadding(new String(value)) + "] - ");
+        }
+      }
+    }
+    return sb.toString();
+  }
+
+  public byte[] convertStringToLong(String value) {
+    ByteBuffer buffer = ByteBuffer.allocate(8);
+    long x = Long.parseLong(value);
+    buffer.putLong(x);
+    return buffer.array();
+//    byte[] longArray = ByteBuffer.allocate(8).putLong(Long.parseLong(value)).array();
+//    return longArray;
+  }
+
+  public long convertByteArrayToLong(byte[] value) {
+    ByteBuffer buffer = ByteBuffer.allocate(8);
+    buffer.put(value);
+    buffer.flip();//need flip
+    return buffer.getLong();
+//    long val = ByteBuffer.wrap(value).getLong();
+//    return val;
+  }
+
+  public byte[] convertIntToByteArray(String value) {
+    return pt.uminho.haslab.cryptoenv.Utils.intArrayToByteArray(pt.uminho.haslab.cryptoenv.Utils.integerToIntArray(Integer.parseInt(value), 10));
+  }
+
+  public int convertByteArrayToInt(byte[] value) {
+    return pt.uminho.haslab.cryptoenv.Utils.intArrayToInteger(pt.uminho.haslab.cryptoenv.Utils.byteArrayToIntArray(value),10);
   }
 
   // Only non-private for testing.
