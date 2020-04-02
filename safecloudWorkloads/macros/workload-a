@@ -10,13 +10,14 @@ workload=site.ycsb.workloads.CryptoWorkload
 
 # schema file property
 # schemafileproperty=/Users/david/dev/thesis_vagrant/YCSB/schemas/appointments.xml
-schemafileproperty=/Users/david/dev/thesis_vagrant/YCSB/schemas/patients.xml
+# schemafileproperty=/Users/david/dev/thesis_vagrant/YCSB/schemas/patients.xml
+schemafileproperty=/home/vagrant/dev/YCSB/schemas/patients.xml
 
 # number of records to load into the database initially
-recordcount=1000000
+recordcount=1000
 
 # number of operations to perform
-operationcount=1000000
+operationcount=1000
 
 # execution time
 # maxexecutiontime=60
@@ -33,9 +34,9 @@ writeallfields=false
 # operations proportion (read, update, scan and insert)
 readproportion=0.5
 updateproportion=0.2
-scanproportion=0.1
+scanproportion=0.2
 insertproportion=0.1
-filterproportion=0.1
+filterproportion=0
 
 # what distribution should be used to select the records to operate on
 requestdistribution=zipfian

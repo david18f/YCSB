@@ -124,7 +124,7 @@ public class CryptoWorkload extends CoreWorkload {
   public static String removeTableProperty;
 
   // TODO safe: check this path
-  public static final String CONFIGURATION_PATH_PROPERTY_DEFAULT = "/home/gsd/YCSB/schemas/macrotests/appointments/PLT-schema.xml";
+  public static final String CONFIGURATION_PATH_PROPERTY_DEFAULT = "/home/vagrant/dev/YCSB/schemas/appointments.xml";
   public static final String CONFIGURATION_PATH_PROPERTY = "configurationpathproperty";
   public static String configurationPathProperty;
 
@@ -349,7 +349,6 @@ public class CryptoWorkload extends CoreWorkload {
 
   public void readParsedSchema(String schemafilename) {
     DatabaseSchema schemaParser = new DatabaseSchema(schemafilename);
-//    schemaParser.parseDatabaseTables(schemafilename);
     tableSchema = schemaParser.getTableSchema("usertable");
     System.out.println("-> "+tableSchema.getTablename());
     keyFormatSize = tableSchema.getKey().getFormatSize();

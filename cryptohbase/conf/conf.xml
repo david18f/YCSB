@@ -1,0 +1,14 @@
+<configuration>
+<property>
+  <name>hbase.rootdir</name>
+  <value>file:///home/vagrant/out/hbase</value>
+</property>
+<property>
+  <name>hbase.zookeeper.property.dataDir</name>
+  <value>/home/vagrant/out/zookeeper</value>
+</property>
+<property>
+  <name>cryptographickey</name>
+  <value>/home/vagrant/dev/YCSB/key.txt</value>
+</property>
+</configuration>

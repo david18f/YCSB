@@ -9,7 +9,7 @@
         <encryptionmode>disable</encryptionmode>
     </default>
     <table>
-        <name>usertable</name>
+          <name>usertable</name>
         <default>
             <encryptionmode>enable</encryptionmode>
         </default>

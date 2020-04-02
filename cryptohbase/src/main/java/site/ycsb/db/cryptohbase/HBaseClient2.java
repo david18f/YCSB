@@ -55,9 +55,6 @@ public class HBaseClient2 extends site.ycsb.DB {
   private Table currentTable = null;
   private BufferedMutator bufferedMutator = null;
 
-  private String columnFamily = "";
-  private byte[] columnFamilyBytes;
-
   /**
    * Durability to use for puts and deletes.
    */
@@ -85,6 +82,7 @@ public class HBaseClient2 extends site.ycsb.DB {
   public void init() throws DBException {
     // TODO safe: add conf.xml and key.txt?
     //    Inject the schema file path to the Configuration object
+    config.addResource("conf.xml");
     config.set("schema", schemafileproperty);
 
     if ("true"
@@ -117,29 +115,6 @@ public class HBaseClient2 extends site.ycsb.DB {
       }
     }
 
-    String table = getProperties().getProperty(TABLENAME_PROPERTY, TABLENAME_PROPERTY_DEFAULT);
-    try {
-      THREAD_COUNT.getAndIncrement();
-      synchronized (THREAD_COUNT) {
-        if (connection == null) {
-          // Initialize if not set up already.
-          connection = ConnectionFactory.createConnection(config);
-
-          // Terminate right now if table does not exist, since the client
-          // will not propagate this error upstream once the workload
-          // starts.
-          final TableName tName = TableName.valueOf(table);
-          try (Admin admin = connection.getAdmin()) {
-            if (!admin.tableExists(tName)) {
-              throw new DBException("Table " + tName + " does not exists");
-            }
-          }
-        }
-      }
-    } catch (java.io.IOException e) {
-      throw new DBException(e);
-    }
-
     if ((getProperties().getProperty("debug") != null)
         && (getProperties().getProperty("debug").compareTo("true") == 0)) {
       debug = true;
@@ -150,15 +125,26 @@ public class HBaseClient2 extends site.ycsb.DB {
       usePageFilter = false;
     }
 
-    columnFamily = getProperties().getProperty("columnfamily");
-    if (columnFamily == null) {
-      System.err.println("Error, must specify a columnfamily for HBase table");
-      throw new DBException("No columnfamily specified");
-    }
-    columnFamilyBytes = Bytes.toBytes(columnFamily);
+    String table = getProperties().getProperty(TABLENAME_PROPERTY, TABLENAME_PROPERTY_DEFAULT);
 
     this.schemaFile = schemafileproperty;
     this.tableSchema = new DatabaseSchema(this.schemaFile).getTableSchema(table);
+
+    try {
+      THREAD_COUNT.getAndIncrement();
+      synchronized (THREAD_COUNT) {
+        if (connection == null) {
+          // Initialize if not set up already.
+          connection = ConnectionFactory.createConnection(config);
+
+          if (!verifyTable(table).isOk())
+            throw new DBException();
+        }
+      }
+    } catch (java.io.IOException e) {
+      throw new DBException(e);
+    }
+
   }
 
   public boolean checkIfTableExists(String tablename) {
@@ -362,9 +348,6 @@ public class HBaseClient2 extends site.ycsb.DB {
       // bring back in one call.
       // We get back recordcount records
       s.setCaching(recordcount);
-      if (this.usePageFilter) {
-        s.setFilter(new PageFilter(recordcount));
-      }
 
       // add specified fields or else all fields
       if (fields == null) {
