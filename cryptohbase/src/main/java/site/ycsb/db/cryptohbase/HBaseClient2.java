@@ -125,7 +125,7 @@ public class HBaseClient2 extends site.ycsb.DB {
       usePageFilter = false;
     }
 
-    String table = getProperties().getProperty(TABLENAME_PROPERTY, TABLENAME_PROPERTY_DEFAULT);
+    String table = "usertable";
 
     this.schemaFile = schemafileproperty;
     this.tableSchema = new DatabaseSchema(this.schemaFile).getTableSchema(table);
@@ -531,6 +531,8 @@ public class HBaseClient2 extends site.ycsb.DB {
       Scan s = new Scan().withStartRow(Bytes.toBytes(startkey));
       s.setCaching(recordcount);
       Filter filter = whichFilter(filtertype, (String[]) filterproperties);
+//      Filter filter = new RowFilter(CompareOperator.GREATER,
+//          new BinaryComparator(Bytes.toBytes("coisa")));
       s.setFilter(filter);
 
       //add specified fields or else all fields
@@ -595,30 +597,42 @@ public class HBaseClient2 extends site.ycsb.DB {
   }
 
   public Filter whichFilter(String filtertype, String[] properties) {
-    Filter filter;
-    switch (filtertype) {
-      case "singlecolumnvaluefilter":
-        filter = new SingleColumnValueFilter(
-            Bytes.toBytes(properties[2]),
-            Bytes.toBytes(properties[3]),
-            whichOperator(properties[0]),
-            new BinaryComparator(Bytes.toBytes(properties[1]))
-        );
-        break;
-      case "rowfilter":
-      default:
-        byte[] longKey = convertStringToLong(properties[1]);
-        filter = new RowFilter(
-            whichOperator(properties[0]),
-            new BinaryComparator(longKey)
-        );
-//        filter = new RowFilter(
-//          whichOperator(properties[0]),
-//          new BinaryComparator(Bytes.toBytes(properties[1]))
-//        );
-        break;
+    if (filtertype.equals("singlecolumnvaluefilter")) {
+      return new SingleColumnValueFilter(
+          Bytes.toBytes("Family"),
+          Bytes.toBytes("Qualifier"),
+          CompareOperator.GREATER,
+          new BinaryComparator(Bytes.toBytes("coisa"))
+      );
+    } else {
+      return new RowFilter(CompareOperator.GREATER,
+          new BinaryComparator(Bytes.toBytes("coisa")));
     }
-    return filter;
+
+//    Filter filter;
+//    switch (filtertype) {
+//      case "singlecolumnvaluefilter":
+//        filter = new SingleColumnValueFilter(
+//            Bytes.toBytes(properties[2]),
+//            Bytes.toBytes(properties[3]),
+//            whichOperator(properties[0]),
+//            new BinaryComparator(Bytes.toBytes(properties[1]))
+//        );
+//        break;
+//      case "rowfilter":
+//      default:
+//        byte[] longKey = convertStringToLong(properties[1]);
+//        filter = new RowFilter(
+//            whichOperator(properties[0]),
+//            new BinaryComparator(longKey)
+//        );
+////        filter = new RowFilter(
+////          whichOperator(properties[0]),
+////          new BinaryComparator(Bytes.toBytes(properties[1]))
+////        );
+//        break;
+//    }
+//    return filter;
   }
 
   public CompareOperator whichOperator(String operator) {

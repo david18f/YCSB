@@ -162,7 +162,7 @@ public class CryptoWorkload extends CoreWorkload {
     System.out.println("Schema File Property: "+schemafileproperty);
 
 //    read the tablename to perform the operations
-    table = p.getProperty(TABLENAME_PROPERTY, TABLENAME_PROPERTY_DEFAULT);
+    table = "usertable";
 
 //    read schema to set up the qualifiers
     readParsedSchema(schemafileproperty);
