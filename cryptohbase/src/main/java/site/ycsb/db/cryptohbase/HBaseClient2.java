@@ -52,7 +52,7 @@ public class HBaseClient2 extends site.ycsb.DB {
 
   // Depending on the value of clientSideBuffering, either bufferedMutator
   // (clientSideBuffering) or currentTable (!clientSideBuffering) will be used.
-  private Table currentTable = null;
+  private CryptoTable currentTable = null;
   private BufferedMutator bufferedMutator = null;
 
   /**
@@ -288,11 +288,11 @@ public class HBaseClient2 extends site.ycsb.DB {
         }
         // Perform the get operation in the Table interface
         r = currentTable.get(g);
-      } catch (IOException e) {
-        if (debug) {
-          System.err.println("Error doing get: " + e);
-        }
-        return Status.ERROR;
+//      } catch (IOException e) {
+//        if (debug) {
+//          System.err.println("Error doing get: " + e);
+//        }
+//        return Status.ERROR;
       } catch (ConcurrentModificationException e) {
         // do nothing for now...need to understand HBase concurrency model better
         return Status.ERROR;
@@ -343,23 +343,25 @@ public class HBaseClient2 extends site.ycsb.DB {
     Status statusResult = verifyTable(table);
 
     if(statusResult == Status.OK) {
-      Scan s = new Scan().withStartRow(Bytes.toBytes(startkey));
+//      Scan s = new Scan().withStartRow(Bytes.toBytes(startkey));
+      Scan s = new Scan();
       // HBase has no record limit. Here, assume recordcount is small enough to
       // bring back in one call.
-      // We get back recordcount records
-      s.setCaching(recordcount);
+//       We get back recordcount records
+//      s.setCaching(recordcount);
 
       // add specified fields or else all fields
-      if (fields == null) {
-        for (Family f : this.tableSchema.getColumnFamilies()) {
-          s.addFamily(f.getFamilyName().getBytes());
-        }
-      } else {
-        for (String field : fields) {
-          String[] temp_fields = splitField(field);
-          s.addColumn(Bytes.toBytes(temp_fields[0]), Bytes.toBytes(temp_fields[1]));
-        }
-      }
+//      if (fields == null) {
+//        for (Family f : this.tableSchema.getColumnFamilies()) {
+//          s.addFamily(f.getFamilyName().getBytes());
+//        }
+//      } else {
+//        for (String field : fields) {
+//          String[] temp_fields = splitField(field);
+//          s.addColumn(Bytes.toBytes(temp_fields[0]), Bytes.toBytes(temp_fields[1]));
+//        }
+//      }
+//      s.addColumn(Bytes.toBytes("Patient"), Bytes.toBytes("Patient ID"));
 
       // get results
       ResultScanner scanner = null;
