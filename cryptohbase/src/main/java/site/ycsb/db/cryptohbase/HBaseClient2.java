@@ -530,24 +530,17 @@ public class HBaseClient2 extends site.ycsb.DB {
 
     if(statusResult == Status.OK) {
 
-      Scan s = new Scan().withStartRow(Bytes.toBytes(startkey));
+      Scan s = new Scan();
       s.setCaching(recordcount);
-      Filter filter = whichFilter(filtertype, (String[]) filterproperties);
-//      Filter filter = new RowFilter(CompareOperator.GREATER,
-//          new BinaryComparator(Bytes.toBytes("coisa")));
+      Filter filter = new SingleColumnValueFilter(
+          Bytes.toBytes("Appointment"),
+          Bytes.toBytes("Date"),
+          CompareOperator.GREATER,
+          new BinaryComparator(Bytes.toBytes("2010/04/16"))
+      );
       s.setFilter(filter);
 
-      //add specified fields or else all fields
-      if (fields == null) {
-        for (Family f : this.tableSchema.getColumnFamilies()) {
-          s.addFamily(f.getFamilyName().getBytes());
-        }
-      } else {
-        for (String field : fields) {
-          String[] temp_fields = splitField(field);
-          s.addColumn(Bytes.toBytes(temp_fields[0]), Bytes.toBytes(temp_fields[1]));
-        }
-      }
+//      s.addColumn(Bytes.toBytes("Patient"), Bytes.toBytes("Patient ID"));
 
       //get results
       try (ResultScanner scanner = currentTable.getScanner(s)) {

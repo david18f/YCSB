@@ -12,13 +12,10 @@ workload=site.ycsb.workloads.CryptoWorkload
 # schemafileproperty=schema.xml
 
 # number of records to load into the database initially
-recordcount=10000
+recordcount=100000
 
 # number of operations to perform
-operationcount=1000
-
-# execution time
-# maxexecutiontime=90
+operationcount=1000000
 
 # number of YCSB clients threads
 threadcount=1
@@ -32,9 +29,9 @@ writeallfields=true
 # operations proportion (read, update, scan and insert)
 readproportion=0
 updateproportion=0
-scanproportion=1
+scanproportion=0
 insertproportion=0
-filterproportion=0
+filterproportion=1
 readmodifywriteproportion=0
 
 # full table scan/filter flag
