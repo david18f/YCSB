@@ -1,0 +1,55 @@
+# Yahoo! Cloud System Benchmark
+# Workload Only Reads: Heavy read workload
+#   Application example: Session store recording recent actions
+#
+#   Read/update ratio: 100/0
+#   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
+#   Request distribution: zipfian
+
+workload=site.ycsb.workloads.CryptoWorkload
+
+# schema file property
+# schemafileproperty=schema.xml
+
+# number of records to load into the database initially
+recordcount=100000
+
+# number of operations to perform
+operationcount=1000000
+
+# number of YCSB clients threads
+threadcount=1
+
+# to read all fields set true, to read only one set false
+readallfields=true
+
+# to update all fields set true, to update only one set false
+writeallfields=true
+
+# operations proportion (read, update, scan and insert)
+readproportion=0
+updateproportion=0
+scanproportion=0
+insertproportion=0
+filterproportion=0.1
+filterproportion2=0.9
+readmodifywriteproportion=0
+
+# full table scan/filter flag
+fulltablesearch=true
+
+# scan/filter length
+# scanlengthproperty=100
+
+# initial and final years to generate the appointment's date
+initialyear=2015
+finalyear=2020
+
+# what distribution should be used to select the records to operate on
+requestdistribution=zipfian
+
+seed=1024
+insertorder=hashed
+insertstart=0
+
+removetableproperty=false
