@@ -19,19 +19,6 @@
         </key>
         <columns>
             <family>
-                <name>Physician</name>
-                <cryptotechnique>DET</cryptotechnique>
-                <qualifier>
-                    <name>Physician ID</name>
-                    <cryptotechnique>DET</cryptotechnique>
-                    <colformatsize>16</colformatsize>
-                    <misc>
-                        <property>GENERATOR</property>
-                        <type>String</type>
-                    </misc>
-                </qualifier>
-            </family>
-            <family>
                 <name>Patient</name>
                 <qualifier>
                     <name>Patient ID</name>
@@ -53,45 +40,6 @@
                     <misc>
                         <property>GENERATOR</property>
                         <type>Date</type>
-                    </misc>
-                </qualifier>
-                <qualifier>
-                    <name>Type</name>
-                    <cryptotechnique>STD</cryptotechnique>
-                    <colformatsize>64</colformatsize>
-                    <misc>
-                        <property>GENERATOR</property>
-                        <type>String</type>
-                    </misc>
-                </qualifier>
-                <qualifier>
-                    <name>Obs</name>
-                    <cryptotechnique>STD</cryptotechnique>
-                    <colformatsize>1024</colformatsize>
-                    <misc>
-                        <property>GENERATOR</property>
-                        <type>String</type>
-                    </misc>
-                </qualifier>
-            </family>
-            <family>
-                <name>Institution</name>
-                <qualifier>
-                    <name>Name</name>
-                    <cryptotechnique>STD</cryptotechnique>
-                    <colformatsize>128</colformatsize>
-                    <misc>
-                        <property>GENERATOR</property>
-                        <type>String</type>
-                    </misc>
-                </qualifier>
-                <qualifier>
-                    <name>Address</name>
-                    <cryptotechnique>STD</cryptotechnique>
-                    <colformatsize>256</colformatsize>
-                    <misc>
-                        <property>GENERATOR</property>
-                        <type>String</type>
                     </misc>
                 </qualifier>
             </family>

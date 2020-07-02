@@ -90,6 +90,10 @@ public class CryptoWorkload extends CoreWorkload {
   public static final String FILTER_PROPORTION_PROPERTY = "filterproportion";
   public static String filterproportion;
 
+  public static final String FILTER_PROPORTION_PROPERTY_DEFAULT_2 = "0.0";
+  public static final String FILTER_PROPORTION_PROPERTY_2 = "filterproportion2";
+  public static String filterproportion2;
+
   /**
    * Filter Properties: Compare Value
    */
@@ -530,6 +534,9 @@ public class CryptoWorkload extends CoreWorkload {
       case "FILTER":
         doTransactionFilter(db);
         break;
+      case "FILTER2":
+        doTransactionFilter2(db);
+        break;
       case "READMODIFYWRITE":
         doTransactionReadModifyWrite(db);
         break;
@@ -818,6 +825,99 @@ public class CryptoWorkload extends CoreWorkload {
 
   }
 
+  public void doTransactionFilter2(DB db) {
+    long keynum = nextKeynum();
+    String startkeyname = paddingToStartKeyName(keynum);
+
+    int len = Integer.parseInt(scanlengthproperty);
+    String compareValue;
+
+//    String compareValue;
+//    if(comparevalue != null) {
+//      compareValue = comparevalue;
+//    }
+//    else {
+//      compareValue = buildKeyName(nextKeynum());
+//    }
+
+    String operator = doCompareOperation();
+
+    HashSet<String> fields;
+
+    if (!readallfields) {
+      // read a random field
+      String fieldname = fieldnames.get(fieldchooser.nextValue().intValue());
+
+      fields = new HashSet<String>();
+      fields.add(fieldname);
+    } else {
+      fields = new HashSet<>();
+      for(String f : fieldnames) {
+        fields.add(f);
+      }
+    }
+
+    String[] filterProperties;
+    if(filtertype.equals("rowfilter")) {
+      if(comparevalue != null) {
+//        compareValue = Utils.addPadding(comparevalue, keyFormatSize);
+        compareValue = comparevalue;
+      }
+      else {
+        compareValue = buildKeyName(nextKeynum());
+      }
+      filterProperties = new String[2];
+      filterProperties[0] = operator;
+      filterProperties[1] = compareValue;
+    }
+    else {
+//      String generator = this.tableSchema.getGeneratorTypeFromQualifier(ByteBuffer.wrap(familyfilter.getBytes()), ByteBuffer.wrap(qualifierfilter.getBytes()));
+      String generator = this.tableSchema.getGeneratorTypeFromQualifier(familyfilter, qualifierfilter);
+
+      if(generator.equals("Date")) {
+        String timestamp = String.valueOf(dateGenerator.dateToTimestamp(comparevalue));
+//        compareValue = Utils.addPadding(timestamp, this.tableSchema.getFormatSizeFromQualifier(ByteBuffer.wrap(familyfilter.getBytes()), ByteBuffer.wrap(qualifierfilter.getBytes())));
+        compareValue = Utils.addPadding(timestamp, this.tableSchema.getFormatSizeFromQualifier(familyfilter, qualifierfilter));
+      }
+      else {
+//        compareValue = Utils.addPadding(comparevalue, this.tableSchema.getFormatSizeFromQualifier(ByteBuffer.wrap(familyfilter.getBytes()), ByteBuffer.wrap(qualifierfilter.getBytes())));
+        compareValue = Utils.addPadding(comparevalue, this.tableSchema.getFormatSizeFromQualifier(familyfilter, qualifierfilter));
+      }
+
+//      NOTE: this is temporary (to hardcoded to go to production)
+      if(qualifierfilter.equals("Main Identification")) {
+        if (firstTimeSingleColumnValue) {
+//          System.out.println("First Time SIngle Column Value" + " - " + recordcount + " - " + (recordcount * 0.01));
+          patientsMainIdentification = singleColumnPseudoFilter(db, qualifierfilter, recordcount, (int) (recordcount * 0.01));
+          patientsArray = mapToEntries(patientsMainIdentification);
+
+          String randomValue = (String) patientsArray[patientsRandom.nextInt(patientsArray.length)];
+//          compareValue = Utils.addPadding(randomValue, this.tableSchema.getFormatSizeFromQualifier(ByteBuffer.wrap(familyfilter.getBytes()), ByteBuffer.wrap(qualifierfilter.getBytes())));
+          compareValue = Utils.addPadding(randomValue, this.tableSchema.getFormatSizeFromQualifier(familyfilter, qualifierfilter));
+//          System.out.println("Random Value - " + randomValue);
+          firstTimeSingleColumnValue = false;
+
+          patientsMainIdentification.clear();
+        } else {
+          String randomValue = (String) patientsArray[patientsRandom.nextInt(patientsArray.length)];
+          compareValue = Utils.addPadding(randomValue, this.tableSchema.getFormatSizeFromQualifier(familyfilter, qualifierfilter));
+//          compareValue = Utils.addPadding(randomValue, this.tableSchema.getFormatSizeFromQualifier(ByteBuffer.wrap(familyfilter.getBytes()), ByteBuffer.wrap(qualifierfilter.getBytes())));
+//          System.out.println("Random Value - " + randomValue);
+        }
+      }
+
+
+      filterProperties = new String[4];
+      filterProperties[0] = operator;
+      filterProperties[1] = compareValue;
+      filterProperties[2] = familyfilter;
+      filterProperties[3] = qualifierfilter;
+    }
+
+    db.filter2(table, startkeyname, len, filtertype, filterProperties, fields, new Vector<HashMap<String, ByteIterator>>());
+
+  }
+
   /**
    * Creates a weighted discrete values with database operations for a workload to perform.
    * Weights/proportions are read from the properties list and defaults are used
@@ -844,6 +944,8 @@ public class CryptoWorkload extends CoreWorkload {
         READMODIFYWRITE_PROPORTION_PROPERTY, READMODIFYWRITE_PROPORTION_PROPERTY_DEFAULT));
     final double filterproportion = Double.parseDouble(p.getProperty(
         FILTER_PROPORTION_PROPERTY, FILTER_PROPORTION_PROPERTY_DEFAULT));
+    final double filterproportion2 = Double.parseDouble(p.getProperty(
+        FILTER_PROPORTION_PROPERTY_2, FILTER_PROPORTION_PROPERTY_DEFAULT_2));
 
     final DiscreteGenerator operationchooser = new DiscreteGenerator();
     if (readproportion > 0) {
@@ -868,6 +970,10 @@ public class CryptoWorkload extends CoreWorkload {
 
     if (filterproportion > 0 ) {
       operationchooser.addValue(filterproportion, "FILTER");
+    }
+
+    if (filterproportion2 > 0 ) {
+      operationchooser.addValue(filterproportion2, "FILTER2");
     }
 
     return operationchooser;

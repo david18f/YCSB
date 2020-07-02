@@ -9,6 +9,7 @@ import pt.uminho.haslab.safemapper.Family;
 import pt.uminho.haslab.safemapper.Qualifier;
 import pt.uminho.haslab.safemapper.TableSchema;
 import site.ycsb.*;
+import site.ycsb.generator.DateGenerator;
 import site.ycsb.measurements.Measurements;
 
 import org.apache.hadoop.security.UserGroupInformation;
@@ -531,16 +532,7 @@ public class HBaseClient2 extends site.ycsb.DB {
     if(statusResult == Status.OK) {
 
       Scan s = new Scan();
-      s.setCaching(recordcount);
-      Filter filter = new SingleColumnValueFilter(
-          Bytes.toBytes("Appointment"),
-          Bytes.toBytes("Date"),
-          CompareOperator.GREATER,
-          new BinaryComparator(Bytes.toBytes("2010/04/16"))
-      );
-      s.setFilter(filter);
-
-//      s.addColumn(Bytes.toBytes("Patient"), Bytes.toBytes("Patient ID"));
+      s.addColumn(Bytes.toBytes("Appointments"), Bytes.toBytes("Date"));
 
       //get results
       try (ResultScanner scanner = currentTable.getScanner(s)) {

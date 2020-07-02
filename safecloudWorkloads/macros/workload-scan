@@ -32,6 +32,7 @@ updateproportion=0
 scanproportion=0
 insertproportion=0
 filterproportion=1
+filterproportion2=0
 readmodifywriteproportion=0
 
 # full table scan/filter flag
