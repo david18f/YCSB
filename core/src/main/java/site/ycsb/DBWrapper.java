@@ -260,4 +260,18 @@ public class DBWrapper extends DB {
       return res;
     }
   }
+
+  @Override
+  public Status filter2(String table, String startkey, int recordcount, String filtertype, Object filterproperties,
+                       Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+    try (final TraceScope span = tracer.newScope(scopeStringFilter)) {
+      long ist = measurements.getIntendedtartTimeNs();
+      long st = System.nanoTime();
+      Status res = db.filter2(table, startkey, recordcount, filtertype, filterproperties, fields, result);
+      long en=System.nanoTime();
+      measure("FILTER2", res, ist, st, en);
+      measurements.reportStatus("FILTER2", res);
+      return res;
+    }
+  }
 }
