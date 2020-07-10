@@ -532,7 +532,7 @@ public class HBaseClient2 extends site.ycsb.DB {
     if(statusResult == Status.OK) {
 
       Scan s = new Scan();
-      s.addColumn(Bytes.toBytes("Appointments"), Bytes.toBytes("Date"));
+      s.addColumn(Bytes.toBytes("Appointment"), Bytes.toBytes("Date"));
 
       //get results
       try (ResultScanner scanner = currentTable.getScanner(s)) {
