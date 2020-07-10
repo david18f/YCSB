@@ -583,6 +583,64 @@ public class HBaseClient2 extends site.ycsb.DB {
     return statusResult;
   }
 
+  @Override
+  public Status filter2(String table, String startkey, int recordcount, String filtertype, Object filterproperties, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+    //if this is a "new" tableName, init HTable object.  Else, use existing one
+    if (!tableName.equals(table)) {
+      currentTable = null;
+      try {
+        getHTable(table);
+        tableName = table;
+      } catch (IOException e) {
+        System.err.println("Error accessing HBase table: " + e);
+        return Status.ERROR;
+      }
+    }
+
+    Scan s = new Scan();
+    s.addColumn(Bytes.toBytes("Patient"), Bytes.toBytes("Patient ID"));
+
+    //get results
+    try (ResultScanner scanner = currentTable.getScanner(s)) {
+      int numResults = 0;
+      int total = 0;
+      for (Result rr = scanner.next(); rr != null; rr = scanner.next()) {
+        //get row key
+        String key = Bytes.toString(rr.getRow());
+
+        if (key != null) {
+
+          if (debug) {
+            System.out.println("Got filter scan result for key: " + key);
+          }
+
+          HashMap<String, ByteIterator> rowResult = new HashMap<>();
+
+          while (rr.advance()) {
+            final Cell cell = rr.current();
+            rowResult.put(Bytes.toString(CellUtil.cloneQualifier(cell)),
+                new ByteArrayByteIterator(CellUtil.cloneValue(cell)));
+          }
+
+          result.add(rowResult);
+          numResults++;
+
+          if (numResults >= recordcount) {
+            break;
+          }
+
+        } //done with row
+        total++;
+      }
+    } catch (IOException e) {
+      if (debug) {
+        System.out.println("Error in getting/parsing scan result: " + e);
+      }
+      return Status.ERROR;
+    }
+    return Status.OK;
+  }
+
   public Filter whichFilter(String filtertype, String[] properties) {
     if (filtertype.equals("singlecolumnvaluefilter")) {
       return new SingleColumnValueFilter(
